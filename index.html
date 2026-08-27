@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Sushi Lista</title>
+<meta name="description" content="Controla qué platos han llegado a la mesa y cuáles faltan">
+<meta name="theme-color" content="#15151a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bg:#15151a; --bg2:#1e1e26; --bg3:#282833; --line:#33333f;
+  --tx:#f2f0ec; --tx2:#a8a5b3; --tx3:#6d6a78;
+  --rojo:#e8474b; --rojo2:#c73438; --verde:#4cba6b; --ambar:#e8a33d;
+  --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--tx);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:16px; overscroll-behavior:none;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select,textarea{font:inherit}
+img{display:block}
+
+/* ---------- Layout ---------- */
+header{
+  position:sticky;top:0;z-index:20;background:var(--bg);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 8px;
+  display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);
+}
+header h1{font-size:19px;font-weight:700;letter-spacing:.3px;flex:1}
+header h1 span{color:var(--rojo)}
+#chipProgreso{
+  background:var(--bg3);border:1px solid var(--line);border-radius:99px;
+  padding:5px 12px;font-size:13px;font-weight:600;color:var(--tx2);white-space:nowrap;
+}
+#chipProgreso.completo{color:var(--verde);border-color:var(--verde)}
+main{padding:14px 14px 90px;max-width:560px;margin:0 auto}
+.vista{display:none}
+.vista.activa{display:block}
+
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;
+  background:rgba(24,24,30,.97);backdrop-filter:blur(8px);
+  border-top:1px solid var(--line);
+  display:flex;justify-content:space-around;
+  padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+}
+nav button{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:6px 0;color:var(--tx3);font-size:11px;font-weight:600;border-radius:10px;
+}
+nav button .ico{font-size:22px;line-height:1}
+nav button.activa{color:var(--rojo)}
+nav button .bad{
+  position:absolute;transform:translate(14px,-4px);
+  background:var(--rojo);color:#fff;font-size:10px;font-weight:700;
+  min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px;
+}
+
+/* ---------- Componentes ---------- */
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--bg3);border:1px solid var(--line);border-radius:12px;
+  padding:13px 16px;font-weight:600;font-size:15px;width:100%;
+}
+.btn:active{transform:scale(.98)}
+.btn.principal{background:var(--rojo);border-color:var(--rojo)}
+.btn.principal:disabled{opacity:.45}
+.btn.peq{width:auto;padding:8px 14px;font-size:14px}
+.btn.peligro{color:var(--rojo);border-color:#5a2a2c}
+.fila-botones{display:flex;gap:10px;margin-bottom:12px}
+.fila-botones .btn{flex:1}
+h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin:18px 0 8px}
+.vacio{color:var(--tx2);text-align:center;padding:26px 18px;line-height:1.55;font-size:15px}
+.vacio .grande{font-size:40px;margin-bottom:10px}
+
+/* fotos */
+.tira-fotos{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;margin-bottom:10px}
+.tira-fotos:empty{display:none}
+.tira-fotos .mini{position:relative;flex:0 0 auto}
+.tira-fotos img{width:74px;height:74px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.tira-fotos .quitar{
+  position:absolute;top:-6px;right:-6px;background:var(--bg3);border:1px solid var(--line);
+  width:22px;height:22px;border-radius:11px;font-size:11px;display:flex;align-items:center;justify-content:center;
+}
+
+/* plato en carta */
+.plato{
+  display:flex;align-items:center;gap:10px;
+  background:var(--bg2);border:1px solid var(--line);border-radius:12px;
+  padding:10px 12px;margin-bottom:8px;
+}
+.plato .num{
+  background:var(--bg3);border-radius:8px;min-width:34px;height:34px;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--tx2);
+}
+.plato .info{flex:1;min-width:0}
+.plato .nom{font-weight:600;font-size:15px}
+.plato .det{font-size:12.5px;color:var(--tx2);margin-top:1px}
+.plato .det .set{color:var(--ambar);font-weight:600}
+.plato .precio{font-weight:700;font-size:15px;color:var(--tx2);white-space:nowrap}
+.plato .editar{font-size:16px;padding:8px;color:var(--tx3)}
+.plato .pedir{
+  background:var(--rojo);border-radius:10px;padding:9px 13px;font-weight:700;font-size:14px;white-space:nowrap;
+}
+.plato .pedir.enpedido{background:var(--bg3);border:1px solid var(--rojo);color:var(--rojo)}
+
+/* pedido */
+.linea-pedido{
+  display:flex;align-items:center;gap:10px;
+  background:var(--bg2);border:1px solid var(--line);border-radius:12px;
+  padding:10px 12px;margin-bottom:8px;
+}
+.linea-pedido .info{flex:1;min-width:0}
+.linea-pedido .nom{font-weight:600;font-size:15px}
+.linea-pedido .det{font-size:12.5px;color:var(--tx2)}
+.stepper{display:flex;align-items:center;gap:2px;background:var(--bg3);border-radius:10px}
+.stepper button{width:38px;height:38px;font-size:20px;font-weight:600;color:var(--tx2)}
+.stepper .n{min-width:26px;text-align:center;font-weight:700;font-size:16px}
+.linea-pedido .quitar{color:var(--tx3);font-size:15px;padding:8px 6px}
+
+/* mesa */
+#barraProgreso{height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;margin:6px 0 4px}
+#barraProgreso div{height:100%;background:var(--verde);border-radius:4px;transition:width .4s;width:0}
+.mesa-item{
+  display:flex;align-items:center;gap:12px;
+  background:var(--bg2);border:1px solid var(--line);border-radius:14px;
+  padding:14px;margin-bottom:9px;user-select:none;-webkit-user-select:none;
+}
+.mesa-item.pendiente:active{background:var(--bg3)}
+.mesa-item .info{flex:1;min-width:0}
+.mesa-item .nom{font-weight:650;font-size:16px}
+.mesa-item .det{font-size:13px;color:var(--tx2);margin-top:2px}
+.mesa-item .cuenta{font-size:17px;font-weight:800;white-space:nowrap}
+.mesa-item .cuenta .de{color:var(--tx3);font-weight:600}
+.mesa-item .menos{width:38px;height:38px;background:var(--bg3);border-radius:10px;font-size:19px;color:var(--tx2)}
+.mesa-item.hecho{opacity:.55}
+.mesa-item.hecho .nom{text-decoration:line-through}
+.mesa-item.hecho .cuenta{color:var(--verde)}
+.mesa-item .puntos{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.mesa-item .puntos i{width:10px;height:10px;border-radius:5px;background:var(--bg3);border:1px solid var(--line)}
+.mesa-item .puntos i.ok{background:var(--verde);border-color:var(--verde)}
+.llegada-hist{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--tx2)}
+.llegada-hist img{width:46px;height:46px;object-fit:cover;border-radius:8px}
+.llegada-hist:last-child{border-bottom:none}
+
+/* ajustes */
+.campo{margin-bottom:14px}
+.campo label{display:block;font-size:13px;font-weight:600;color:var(--tx2);margin-bottom:6px}
+.campo input,.campo select{
+  width:100%;background:var(--bg3);border:1px solid var(--line);border-radius:10px;
+  padding:12px;color:var(--tx);font-size:15px;
+}
+.nota{font-size:13px;color:var(--tx3);line-height:1.5;margin-top:6px}
+.nota a{color:var(--rojo)}
+
+/* estrellas */
+.estrellas{display:flex;gap:1px;margin-top:4px}
+.estrellas span{font-size:19px;line-height:1;padding:2px 3px}
+.tira-fotos .leida{
+  position:absolute;bottom:3px;right:3px;background:var(--verde);color:#fff;
+  font-size:10px;font-weight:700;border-radius:8px;padding:1px 6px;
+}
+
+/* visitas guardadas */
+.visita-fila{
+  display:flex;align-items:center;gap:10px;padding:11px 4px;
+  border-bottom:1px solid var(--line);
+}
+.visita-fila:last-child{border-bottom:none}
+.visita-fila .info{flex:1;min-width:0}
+.visita-fila .nom{font-weight:600;font-size:15px}
+.visita-fila .det{font-size:12.5px;color:var(--tx2)}
+.visita-fila .tot{font-weight:700;white-space:nowrap;color:var(--tx2)}
+.visita-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14.5px}
+.visita-item:last-child{border-bottom:none}
+.visita-item .n{flex:1}
+.visita-item .est{color:var(--ambar);font-size:13px;letter-spacing:1px}
+
+/* ---------- Modales ---------- */
+.modal-fondo{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40;
+  display:none;align-items:flex-end;justify-content:center;
+}
+.modal-fondo.abierto{display:flex}
+.modal{
+  background:var(--bg2);border-radius:20px 20px 0 0;width:100%;max-width:560px;
+  max-height:88vh;overflow-y:auto;padding:18px 16px calc(20px + env(safe-area-inset-bottom));
+}
+.modal h3{font-size:17px;font-weight:700;margin-bottom:14px}
+.check-linea{
+  display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);
+}
+.check-linea:last-of-type{border-bottom:none}
+.check-linea .cbx{
+  width:26px;height:26px;border-radius:8px;border:2px solid var(--tx3);flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;
+}
+.check-linea.marcada .cbx{background:var(--verde);border-color:var(--verde)}
+.check-linea .info{flex:1;min-width:0}
+.check-linea .nom{font-weight:600;font-size:15px}
+.check-linea .det{font-size:12.5px;color:var(--tx2)}
+.check-linea .sug{color:var(--ambar);font-size:12px;font-weight:700}
+.foto-previa{width:100%;max-height:220px;object-fit:contain;border-radius:12px;margin-bottom:12px;background:#000}
+.nota-ia{background:var(--bg3);border-radius:10px;padding:10px 12px;font-size:13.5px;color:var(--tx2);margin-bottom:10px;line-height:1.45}
+.nota-ia b{color:var(--ambar)}
+
+/* visor foto */
+#visor{position:fixed;inset:0;background:#000;z-index:60;display:none;overflow:hidden;touch-action:none}
+#visor.abierto{display:block}
+#visor img{position:absolute;top:0;left:0;transform-origin:0 0;max-width:none}
+#visor .cerrar{
+  position:fixed;top:calc(12px + env(safe-area-inset-top));right:12px;z-index:61;
+  background:rgba(40,40,50,.8);width:42px;height:42px;border-radius:21px;font-size:18px;
+}
+
+/* toast + spinner */
+#toast{
+  position:fixed;bottom:92px;left:50%;transform:translateX(-50%);z-index:70;
+  background:var(--bg3);border:1px solid var(--line);color:var(--tx);
+  padding:11px 18px;border-radius:12px;font-size:14.5px;font-weight:600;
+  opacity:0;pointer-events:none;transition:opacity .25s;max-width:88vw;text-align:center;
+}
+#toast.visible{opacity:1}
+#cargando{
+  position:fixed;inset:0;background:rgba(15,15,20,.75);z-index:80;
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+}
+#cargando.abierto{display:flex}
+.spinner{
+  width:46px;height:46px;border-radius:23px;border:4px solid var(--bg3);
+  border-top-color:var(--rojo);animation:girar 1s linear infinite;
+}
+@keyframes girar{to{transform:rotate(360deg)}}
+#cargandoTxt{font-size:15px;font-weight:600;color:var(--tx2)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍣 Sushi <span>Lista</span></h1>
+  <div id="chipProgreso" style="display:none"></div>
+</header>
+
+<main>
+
+  <!-- ============ CARTA ============ -->
+  <section class="vista" id="vCarta">
+    <div class="tira-fotos" id="fotosCarta"></div>
+    <div class="fila-botones">
+      <button class="btn" id="btnFotoCarta">📷 Foto de la carta</button>
+      <button class="btn principal" id="btnIaCarta">🤖 Leer con IA</button>
+    </div>
+    <div id="listaPlatos"></div>
+    <button class="btn" id="btnPlatoManual" style="margin-top:6px">＋ Añadir plato a mano</button>
+    <div class="vacio" id="cartaVacia" style="display:none">
+      <div class="grande">📖</div>
+      Haz una foto de la carta y pulsa <b>Leer con IA</b> para convertirla en lista de platos.<br><br>
+      <button class="btn peq" id="btnDemo">Probar con carta de ejemplo</button>
+    </div>
+  </section>
+
+  <!-- ============ PEDIDO ============ -->
+  <section class="vista" id="vPedido">
+    <div class="tira-fotos" id="fotosLista"></div>
+    <div class="fila-botones">
+      <button class="btn" id="btnFotoLista">📷 Foto de la lista</button>
+      <button class="btn principal" id="btnIaLista">🤖 Leer con IA</button>
+    </div>
+    <div id="lineasPedido"></div>
+    <div class="card" id="resumenPedido" style="display:none"></div>
+    <div class="vacio" id="pedidoVacio" style="display:none">
+      <div class="grande">📝</div>
+      Aquí va lo que habéis pedido.<br>
+      Haz una foto de la lista donde apuntáis los platos y pulsa <b>Leer con IA</b>,
+      o añade platos desde la pestaña <b>Carta</b> con el botón <b>Pedir</b>.
+    </div>
+  </section>
+
+  <!-- ============ MESA ============ -->
+  <section class="vista" id="vMesa">
+    <div id="mesaContenido"></div>
+  </section>
+
+  <!-- ============ AJUSTES ============ -->
+  <section class="vista" id="vAjustes">
+    <div class="card">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">🤖 Lectura con IA</h3>
+      <div class="campo">
+        <label>Clave API de Anthropic</label>
+        <input type="password" id="inpApiKey" placeholder="sk-ant-..." autocomplete="off">
+      </div>
+      <div class="campo">
+        <label>Modelo</label>
+        <select id="selModelo">
+          <option value="claude-opus-5">Opus 5 — máxima calidad (por defecto)</option>
+          <option value="claude-sonnet-5">Sonnet 5 — equilibrado</option>
+          <option value="claude-haiku-4-5">Haiku 4.5 — el más rápido y barato</option>
+        </select>
+      </div>
+      <div class="fila-botones" style="margin-bottom:0">
+        <button class="btn" id="btnGuardarKey">Guardar</button>
+        <button class="btn" id="btnProbarKey">Probar conexión</button>
+      </div>
+      <p class="nota">La clave se guarda solo en este móvil. Se crea en
+      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+      Cada lectura de una foto cuesta unos pocos céntimos.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">🍽️ Visita</h3>
+      <button class="btn" id="btnNuevaVisita" style="margin-bottom:10px">🔄 Nueva visita (guarda la actual en el historial)</button>
+      <button class="btn peligro" id="btnBorrarTodo">🗑️ Borrar carta y pedido actual</button>
+      <p class="nota">Las visitas guardadas y las puntuaciones de los platos no se borran.</p>
+    </div>
+
+    <div class="card" id="cardVisitas" style="display:none">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">📅 Visitas anteriores</h3>
+      <div id="listaVisitas"></div>
+    </div>
+
+    <p class="nota" style="text-align:center">Sushi Lista <span id="version"></span> · hecha para no perder la cuenta 🥢</p>
+  </section>
+
+</main>
+
+<nav>
+  <button data-vista="vCarta" class="activa"><span class="ico">📖</span>Carta</button>
+  <button data-vista="vPedido"><span class="bad" id="badPedido" style="display:none"></span><span class="ico">📝</span>Pedido</button>
+  <button data-vista="vMesa"><span class="bad" id="badMesa" style="display:none"></span><span class="ico">🍣</span>Mesa</button>
+  <button data-vista="vAjustes"><span class="ico">⚙️</span>Ajustes</button>
+</nav>
+
+<!-- Modal llegada -->
+<div class="modal-fondo" id="mLlegadaFondo">
+  <div class="modal">
+    <h3>🛎️ ¿Qué han traído?</h3>
+    <img class="foto-previa" id="llegadaFoto" style="display:none">
+    <div class="nota-ia" id="llegadaNota" style="display:none"></div>
+    <div id="llegadaLineas"></div>
+    <div class="fila-botones" style="margin-top:14px;margin-bottom:0">
+      <button class="btn" id="btnLlegadaCancelar">Cancelar</button>
+      <button class="btn principal" id="btnLlegadaOk">✓ Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal editor de plato -->
+<div class="modal-fondo" id="mPlatoFondo">
+  <div class="modal">
+    <h3 id="mPlatoTitulo">Plato</h3>
+    <div class="campo"><label>Nombre</label><input id="pNombre" placeholder="Maki de salmón"></div>
+    <div style="display:flex;gap:10px">
+      <div class="campo" style="flex:1"><label>Nº en la carta</label><input id="pNumero" placeholder="12"></div>
+      <div class="campo" style="flex:1"><label>Precio</label><input id="pPrecio" placeholder="4.50"></div>
+    </div>
+    <div class="campo"><label>Categoría</label><input id="pCategoria" placeholder="Maki, Nigiri, Set…"></div>
+    <div class="campo">
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="pEsSet" style="width:20px;height:20px"> Es un set / combinado
+      </label>
+      <input id="pContiene" placeholder="Qué incluye (ej: 8 maki + 4 nigiri…)" style="margin-top:8px;width:100%;background:var(--bg3);border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--tx)">
+    </div>
+    <div class="fila-botones" style="margin-bottom:10px">
+      <button class="btn" id="btnPlatoCancelar">Cancelar</button>
+      <button class="btn principal" id="btnPlatoOk">Guardar</button>
+    </div>
+    <button class="btn peligro" id="btnPlatoBorrar" style="display:none">Eliminar plato</button>
+  </div>
+</div>
+
+<!-- Modal detalle de visita -->
+<div class="modal-fondo" id="mVisitaFondo">
+  <div class="modal">
+    <h3 id="mVisitaTitulo">Visita</h3>
+    <div id="mVisitaCuerpo"></div>
+    <div class="fila-botones" style="margin-top:14px;margin-bottom:10px">
+      <button class="btn" id="btnVisitaCerrar">Cerrar</button>
+    </div>
+    <button class="btn peligro" id="btnVisitaBorrar">Eliminar esta visita</button>
+  </div>
+</div>
+
+<!-- Visor de foto -->
+<div id="visor"><img id="visorImg"><button class="cerrar" id="visorCerrar">✕</button></div>
+
+<div id="toast"></div>
+<div id="cargando"><div class="spinner"></div><div id="cargandoTxt">Leyendo…</div></div>
+
+<input type="file" accept="image/*" capture="environment" id="inpFoto" style="display:none">
+
+<script>
+'use strict';
+const VERSION='1.0.0';
+document.getElementById('version').textContent='v'+VERSION;
+
+/* ================= Estado ================= */
+const CLAVE='sushilista_v1';
+let estado={platos:[],pedido:[],fotosCarta:[],fotosLista:[],llegadas:[],visitas:[]};
+try{const g=localStorage.getItem(CLAVE);if(g)estado=Object.assign(estado,JSON.parse(g));}catch(e){}
+// migración: fotosLista pasa de ["id"] a [{id,leida}]
+estado.fotosLista=(estado.fotosLista||[]).map(f=>typeof f==='string'?{id:f,leida:false}:f);
+estado.visitas=estado.visitas||[];
+function guardar(){localStorage.setItem(CLAVE,JSON.stringify(estado));}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const $=id=>document.getElementById(id);
+
+/* ================= IndexedDB (fotos) ================= */
+let db=null;
+function abrirDB(){return new Promise((res,rej)=>{
+  const r=indexedDB.open('sushilista',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('fotos');
+  r.onsuccess=()=>{db=r.result;res();};
+  r.onerror=()=>rej(r.error);
+});}
+const fotoPut=(id,blob)=>new Promise((res,rej)=>{const t=db.transaction('fotos','readwrite');t.objectStore('fotos').put(blob,id);t.oncomplete=res;t.onerror=()=>rej(t.error);});
+const fotoGet=id=>new Promise((res,rej)=>{const r=db.transaction('fotos').objectStore('fotos').get(id);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error);});
+const fotoDel=id=>new Promise(res=>{const t=db.transaction('fotos','readwrite');t.objectStore('fotos').delete(id);t.oncomplete=res;t.onerror=res;});
+const urlCache={};
+async function fotoURL(id){
+  if(urlCache[id])return urlCache[id];
+  const b=await fotoGet(id); if(!b)return null;
+  urlCache[id]=URL.createObjectURL(b); return urlCache[id];
+}
+
+/* ================= Utilidades ================= */
+function toast(msj){const t=$('toast');t.textContent=msj;t.classList.add('visible');clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove('visible'),2200);}
+function vibrar(ms){if(navigator.vibrate)navigator.vibrate(ms||30);}
+function cargando(txt){$('cargandoTxt').textContent=txt||'Leyendo…';$('cargando').classList.add('abierto');}
+function finCargando(){$('cargando').classList.remove('abierto');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function precioNum(p){const m=String(p==null?'':p).replace(',','.').match(/[\d.]+/);return m?parseFloat(m[0]):null;}
+
+/* Foto: captura y reduce (máx 2000 px, JPEG) */
+function pedirFoto(){return new Promise(res=>{
+  const inp=$('inpFoto'); inp.value='';
+  inp.onchange=()=>res(inp.files[0]||null);
+  inp.click();
+});}
+async function reducirFoto(file){
+  const bmp=await createImageBitmap(file);
+  const MAX=2000; let w=bmp.width,h=bmp.height;
+  const f=Math.min(1,MAX/Math.max(w,h)); w=Math.round(w*f); h=Math.round(h*f);
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  cv.getContext('2d').drawImage(bmp,0,0,w,h); bmp.close&&bmp.close();
+  return new Promise(res=>cv.toBlob(res,'image/jpeg',0.85));
+}
+function blobABase64(blob){return new Promise(res=>{
+  const r=new FileReader();
+  r.onload=()=>res(r.result.split(',')[1]);
+  r.readAsDataURL(blob);
+});}
+
+/* ================= Llamada a Claude ================= */
+function apiKey(){return localStorage.getItem('sushilista_apikey')||'';}
+function modelo(){return localStorage.getItem('sushilista_modelo')||'claude-opus-5';}
+
+async function llamarClaude(bloques,maxTokens){
+  const key=apiKey();
+  if(!key){toast('Pon tu clave API en Ajustes ⚙️');cambiarVista('vAjustes');throw new Error('sin clave');}
+  const mod=modelo();
+  const cuerpo={model:mod,max_tokens:maxTokens||8000,messages:[{role:'user',content:bloques}]};
+  const cab={
+    'x-api-key':key,
+    'anthropic-version':'2023-06-01',
+    'content-type':'application/json',
+    'anthropic-dangerous-direct-browser-access':'true'
+  };
+  // En Opus 5, activa el "fallback" automático si el modelo declina la petición
+  let usarFallback=mod.startsWith('claude-opus-5');
+  for(let intento=0;intento<2;intento++){
+    const c={...cab}, b={...cuerpo};
+    if(usarFallback&&intento===0){c['anthropic-beta']='server-side-fallback-2026-07-01';b.fallbacks='default';}
+    let resp;
+    try{
+      resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:c,body:JSON.stringify(b)});
+    }catch(e){
+      if(usarFallback&&intento===0)continue; // reintenta sin la cabecera beta
+      throw new Error('Sin conexión con la API (¿hay internet?)');
+    }
+    const datos=await resp.json().catch(()=>null);
+    if(!resp.ok){
+      const msj=datos&&datos.error&&datos.error.message?datos.error.message:('Error '+resp.status);
+      if(resp.status===401)throw new Error('Clave API no válida. Revísala en Ajustes.');
+      if(usarFallback&&intento===0&&resp.status===400)continue;
+      throw new Error(msj);
+    }
+    if(datos.stop_reason==='refusal')throw new Error('El modelo ha declinado leer esta imagen.');
+    return (datos.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('');
+  }
+  throw new Error('No se pudo completar la petición.');
+}
+function extraerJSON(texto){
+  const a=texto.indexOf('{'),z=texto.lastIndexOf('}');
+  if(a<0||z<=a)throw new Error('La IA no devolvió datos válidos.');
+  return JSON.parse(texto.slice(a,z+1));
+}
+async function bloquesImagen(ids){
+  const out=[];
+  for(let i=0;i<ids.length;i++){
+    const blob=await fotoGet(ids[i]); if(!blob)continue;
+    if(ids.length>1)out.push({type:'text',text:'Imagen '+(i+1)+':'});
+    out.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:await blobABase64(blob)}});
+  }
+  return out;
+}
+
+/* ================= IA: leer carta ================= */
+async function iaLeerCarta(){
+  if(!estado.fotosCarta.length){toast('Primero haz una foto de la carta');return;}
+  cargando('Leyendo la carta…');
+  try{
+    const bloques=await bloquesImagen(estado.fotosCarta);
+    bloques.push({type:'text',text:
+`Estas fotos son la carta de un restaurante (probablemente sushi). Extrae TODOS los platos.
+Responde SOLO con un JSON válido, sin explicaciones, con esta forma exacta:
+{"platos":[{"numero":"12","nombre":"Maki salmón","precio":"4","categoria":"Maki rolls","es_set":false,"contiene":""}]}
+Reglas:
+- "numero": el número del plato en la carta si lo tiene; si no, "".
+- "nombre": corto y claro, en el idioma de la carta.
+- "precio": solo la cifra, "" si no se ve.
+- "categoria": la sección de la carta donde aparece.
+- "es_set": true solo si el plato es un set/combinado/bandeja que incluye varios platos o piezas variadas.
+- "contiene": si es un set, describe brevemente qué incluye; si no, "".
+- No inventes platos que no se vean. Incluye todos los que se lean, aunque sean muchos.`});
+    const json=extraerJSON(await llamarClaude(bloques,16000));
+    const nuevos=(json.platos||[]).map(p=>({
+      id:uid(),numero:String(p.numero||''),nombre:String(p.nombre||'').trim(),
+      precio:String(p.precio||''),categoria:String(p.categoria||''),
+      esSet:!!p.es_set,contiene:String(p.contiene||'')
+    })).filter(p=>p.nombre);
+    if(!nuevos.length)throw new Error('No se han encontrado platos en la foto.');
+    // añade sin duplicar (por nombre)
+    let añadidos=0;
+    for(const n of nuevos){
+      const ya=estado.platos.find(p=>p.nombre.toLowerCase()===n.nombre.toLowerCase());
+      if(ya){Object.assign(ya,{numero:n.numero||ya.numero,precio:n.precio||ya.precio,categoria:n.categoria||ya.categoria,esSet:n.esSet||ya.esSet,contiene:n.contiene||ya.contiene});}
+      else{estado.platos.push(n);añadidos++;}
+    }
+    guardar();render();
+    toast(añadidos+' platos leídos de la carta ✓');vibrar(60);
+  }catch(e){toast('⚠️ '+e.message);}
+  finCargando();
+}
+
+/* ================= IA: leer lista apuntada ================= */
+async function iaLeerLista(){
+  if(!estado.fotosLista.length){toast('Primero haz una foto de la lista');return;}
+  if(!estado.platos.length){toast('Lee antes la carta, para poder casar los platos');return;}
+  const noLeidas=estado.fotosLista.filter(f=>!f.leida);
+  if(!noLeidas.length){toast('Todas las listas ya están leídas. Haz foto de la lista nueva.');return;}
+  cargando('Leyendo vuestra lista…');
+  try{
+    const cartaTxt=estado.platos.map(p=>(p.numero?p.numero+' · ':'')+p.nombre).join('\n');
+    const bloques=await bloquesImagen(noLeidas.map(f=>f.id));
+    bloques.push({type:'text',text:
+`Esta foto es una lista escrita a mano en un restaurante donde apuntamos lo que pedimos: números de plato o nombres, y cantidades (palotes, cifras o marcas).
+La carta del restaurante tiene estos platos (numero · nombre):
+${cartaTxt}
+Responde SOLO con un JSON válido:
+{"pedido":[{"nombre":"<nombre EXACTO de la lista de arriba>","cantidad":2}],"dudas":"<si algo no se entiende o no casa con la carta, explícalo aquí en una frase; si no, cadena vacía>"}
+Reglas:
+- Casa cada apunte con el plato de la carta (por número o por nombre parecido) y devuelve el nombre EXACTO de la carta.
+- Si un apunte no casa con nada de la carta, no lo inventes: menciónalo en "dudas".
+- La cantidad por defecto es 1 si solo aparece el plato sin número de unidades.`});
+    const json=extraerJSON(await llamarClaude(bloques,8000));
+    let añadidos=0;
+    for(const l of (json.pedido||[])){
+      const plato=buscarPlato(String(l.nombre||''));
+      const cant=Math.max(1,parseInt(l.cantidad)||1);
+      if(!plato)continue;
+      const linea=estado.pedido.find(x=>x.platoId===plato.id);
+      if(linea)linea.pedidas+=cant; else estado.pedido.push({platoId:plato.id,pedidas:cant,llegadas:0});
+      añadidos+=cant;
+    }
+    noLeidas.forEach(f=>f.leida=true);
+    guardar();render();
+    if(json.dudas)toast('Leído ✓ Ojo: '+json.dudas);
+    else toast(añadidos+' unidades añadidas al pedido ✓');
+    vibrar(60);
+  }catch(e){toast('⚠️ '+e.message);}
+  finCargando();
+}
+
+/* ================= IA: reconocer llegada ================= */
+async function iaReconocerLlegada(fotoId){
+  const pendientes=lineasPendientes();
+  if(!pendientes.length)return null;
+  const txtPend=pendientes.map(o=>{
+    const p=platoDe(o.platoId);
+    return (p.numero?p.numero+' · ':'')+p.nombre+' (faltan '+(o.pedidas-o.llegadas)+')'+(p.esSet?' [SET: '+p.contiene+']':'');
+  }).join('\n');
+  const bloques=await bloquesImagen([fotoId]);
+  bloques.push({type:'text',text:
+`Esta foto es lo que el camarero acaba de traer a la mesa en un restaurante de sushi.
+Los platos que estamos esperando son:
+${txtPend}
+Fíjate en el aspecto (tipo de pieza, colores, ingredientes) y en las cantidades. Una bandeja puede traer VARIOS platos distintos a la vez, y un SET cuenta como un solo plato aunque tenga piezas variadas.
+Responde SOLO con un JSON válido:
+{"sugerencias":[{"nombre":"<nombre EXACTO de la lista de arriba>","cantidad":1}],"nota":"<una frase corta con tu razonamiento o dudas>"}
+Si no puedes identificar nada con seguridad, deja "sugerencias" vacío y explica en "nota".`});
+  const json=extraerJSON(await llamarClaude(bloques,4000));
+  return json;
+}
+
+/* ================= Lógica de datos ================= */
+function platoDe(id){return estado.platos.find(p=>p.id===id)||{nombre:'(plato borrado)',numero:'',precio:'',esSet:false,contiene:'',categoria:''};}
+function lineasPendientes(){return estado.pedido.filter(l=>l.llegadas<l.pedidas);}
+function totales(){
+  let ped=0,lleg=0;
+  estado.pedido.forEach(l=>{ped+=l.pedidas;lleg+=Math.min(l.llegadas,l.pedidas);});
+  return {ped,lleg};
+}
+function buscarPlato(nombre){
+  const n=nombre.trim().toLowerCase(); if(!n)return null;
+  let p=estado.platos.find(x=>x.nombre.toLowerCase()===n); if(p)return p;
+  p=estado.platos.find(x=>x.numero&&x.numero===nombre.trim()); if(p)return p;
+  p=estado.platos.find(x=>x.nombre.toLowerCase().includes(n)||n.includes(x.nombre.toLowerCase()));
+  return p||null;
+}
+function pedirPlato(id){
+  const l=estado.pedido.find(x=>x.platoId===id);
+  if(l)l.pedidas++; else estado.pedido.push({platoId:id,pedidas:1,llegadas:0});
+  guardar();render();vibrar(25);
+  toast(platoDe(id).nombre+' → pedido ('+(l?l.pedidas:1)+')');
+}
+
+/* ================= Render ================= */
+function cambiarVista(id){
+  document.querySelectorAll('.vista').forEach(v=>v.classList.toggle('activa',v.id===id));
+  document.querySelectorAll('nav button[data-vista]').forEach(b=>b.classList.toggle('activa',b.dataset.vista===id));
+  window.scrollTo(0,0);
+}
+async function pintarTira(cont,items,alBorrar){
+  cont.innerHTML='';
+  for(const it of items){
+    const id=typeof it==='string'?it:it.id;
+    const url=await fotoURL(id); if(!url)continue;
+    const d=document.createElement('div'); d.className='mini';
+    const img=document.createElement('img'); img.src=url;
+    img.onclick=()=>abrirVisor(url);
+    const q=document.createElement('button'); q.className='quitar'; q.textContent='✕';
+    q.onclick=e=>{e.stopPropagation();alBorrar(id);};
+    d.append(img,q);
+    if(typeof it==='object'&&it.leida){const b=document.createElement('span');b.className='leida';b.textContent='✓ leída';d.appendChild(b);}
+    cont.appendChild(d);
+  }
+}
+function estrellasHTML(p){
+  let h='<div class="estrellas">';
+  for(let i=1;i<=5;i++)h+='<span data-estrella="'+p.id+':'+i+'" style="color:'+(i<=(p.nota||0)?'var(--ambar)':'var(--bg3)')+'">★</span>';
+  return h+'</div>';
+}
+function render(){
+  /* --- chips / badges --- */
+  const t=totales();
+  const chip=$('chipProgreso');
+  if(t.ped>0){chip.style.display='';chip.textContent=t.lleg+' / '+t.ped+' 🍽️';chip.classList.toggle('completo',t.lleg>=t.ped);}
+  else chip.style.display='none';
+  const bp=$('badPedido');bp.style.display=t.ped?'' :'none';bp.textContent=t.ped;
+  const bm=$('badMesa');const falta=t.ped-t.lleg;bm.style.display=falta>0?'':'none';bm.textContent=falta;
+
+  /* --- carta --- */
+  $('cartaVacia').style.display=(estado.platos.length||estado.fotosCarta.length)?'none':'';
+  $('btnPlatoManual').style.display=(estado.platos.length||estado.fotosCarta.length)?'':'none';
+  pintarTira($('fotosCarta'),estado.fotosCarta,async id=>{
+    estado.fotosCarta=estado.fotosCarta.filter(x=>x!==id);await fotoDel(id);guardar();render();
+  });
+  const porCat={};
+  estado.platos.forEach(p=>{const c=p.categoria||'Otros';(porCat[c]=porCat[c]||[]).push(p);});
+  let html='';
+  for(const cat in porCat){
+    html+='<h2>'+esc(cat)+'</h2>';
+    for(const p of porCat[cat]){
+      const linea=estado.pedido.find(x=>x.platoId===p.id);
+      html+='<div class="plato">'
+        +(p.numero?'<div class="num">'+esc(p.numero)+'</div>':'')
+        +'<div class="info"><div class="nom">'+esc(p.nombre)+'</div>'
+        +((p.esSet&&p.contiene)?'<div class="det"><span class="set">SET</span> '+esc(p.contiene)+'</div>':(p.esSet?'<div class="det"><span class="set">SET</span></div>':''))
+        +((p.nota||0)>0?estrellasHTML(p):'')
+        +'</div>'
+        +(p.precio?'<div class="precio">'+esc(p.precio)+'€</div>':'')
+        +'<button class="editar" data-editar="'+p.id+'">✏️</button>'
+        +'<button class="pedir'+(linea?' enpedido':'')+'" data-pedir="'+p.id+'">'+(linea?'×'+linea.pedidas:'Pedir')+'</button>'
+        +'</div>';
+    }
+  }
+  $('listaPlatos').innerHTML=html;
+
+  /* --- pedido --- */
+  $('pedidoVacio').style.display=estado.pedido.length?'none':'';
+  pintarTira($('fotosLista'),estado.fotosLista,async id=>{
+    estado.fotosLista=estado.fotosLista.filter(f=>f.id!==id);await fotoDel(id);guardar();render();
+  });
+  let hp='';
+  for(const l of estado.pedido){
+    const p=platoDe(l.platoId);
+    hp+='<div class="linea-pedido">'
+      +'<div class="info"><div class="nom">'+(p.numero?esc(p.numero)+' · ':'')+esc(p.nombre)+'</div>'
+      +(p.precio?'<div class="det">'+esc(p.precio)+'€ / ud</div>':'')
+      +'</div>'
+      +'<div class="stepper"><button data-menos="'+l.platoId+'">−</button><span class="n">'+l.pedidas+'</span><button data-mas="'+l.platoId+'">＋</button></div>'
+      +'<button class="quitar" data-quitar="'+l.platoId+'">✕</button>'
+      +'</div>';
+  }
+  $('lineasPedido').innerHTML=hp;
+  const res=$('resumenPedido');
+  if(estado.pedido.length){
+    let unidades=0,total=0,conPrecio=true;
+    estado.pedido.forEach(l=>{unidades+=l.pedidas;const pr=precioNum(platoDe(l.platoId).precio);if(pr==null)conPrecio=false;else total+=pr*l.pedidas;});
+    res.style.display='';
+    res.innerHTML='<b>'+unidades+'</b> unidades en '+estado.pedido.length+' platos'
+      +(conPrecio?' · aprox <b>'+total.toFixed(2).replace('.',',')+' €</b>':'');
+  }else res.style.display='none';
+
+  /* --- mesa --- */
+  let hm='';
+  if(!estado.pedido.length){
+    hm='<div class="vacio"><div class="grande">🍣</div>Cuando tengas el pedido hecho, aquí verás qué ha llegado y qué falta.<br>Cada vez que traigan algo: foto o un toque al plato.</div>';
+  }else{
+    hm='<div style="display:flex;justify-content:space-between;font-size:14px;color:var(--tx2);font-weight:600"><span>Han llegado '+t.lleg+' de '+t.ped+'</span><span>'+(t.ped-t.lleg>0?('faltan '+(t.ped-t.lleg)):'¡todo servido! 🎉')+'</span></div>'
+      +'<div id="barraProgreso"><div style="width:'+(t.ped?Math.round(100*t.lleg/t.ped):0)+'%"></div></div>'
+      +'<div class="fila-botones" style="margin-top:12px">'
+      +'<button class="btn principal" id="btnFotoLlegada">📷 Han traído algo</button>'
+      +'<button class="btn" id="btnManoLlegada">✋ Marcar a mano</button></div>';
+    const pend=lineasPendientes();
+    const hechos=estado.pedido.filter(l=>l.llegadas>=l.pedidas);
+    if(pend.length){
+      hm+='<h2>Por llegar</h2>';
+      for(const l of pend){
+        const p=platoDe(l.platoId);
+        let puntos='';for(let i=0;i<l.pedidas&&l.pedidas<=12;i++)puntos+='<i class="'+(i<l.llegadas?'ok':'')+'"></i>';
+        hm+='<div class="mesa-item pendiente" data-llego="'+l.platoId+'">'
+          +'<div class="info"><div class="nom">'+(p.numero?esc(p.numero)+' · ':'')+esc(p.nombre)+'</div>'
+          +(p.esSet&&p.contiene?'<div class="det">SET: '+esc(p.contiene)+'</div>':'')
+          +'<div class="det">toca cuando llegue ↑</div>'
+          +(puntos?'<div class="puntos">'+puntos+'</div>':'')
+          +'</div>'
+          +'<div class="cuenta">'+l.llegadas+'<span class="de">/'+l.pedidas+'</span></div>'
+          +(l.llegadas>0?'<button class="menos" data-deshacer="'+l.platoId+'">−</button>':'')
+          +'</div>';
+      }
+    }
+    if(hechos.length){
+      hm+='<h2>Ya en la mesa</h2>';
+      for(const l of hechos){
+        const p=platoDe(l.platoId);
+        hm+='<div class="mesa-item hecho">'
+          +'<div class="info"><div class="nom">'+(p.numero?esc(p.numero)+' · ':'')+esc(p.nombre)+'</div>'
+          +estrellasHTML(p)+'</div>'
+          +'<div class="cuenta">✓ '+l.llegadas+'/'+l.pedidas+'</div>'
+          +'<button class="menos" data-deshacer="'+l.platoId+'">−</button>'
+          +'</div>';
+      }
+    }
+    if(estado.llegadas.length){
+      hm+='<h2>Entregas</h2><div class="card" id="histLlegadas"></div>';
+    }
+  }
+  $('mesaContenido').innerHTML=hm;
+  if(estado.llegadas.length&&$('histLlegadas'))pintarHistorial();
+
+  /* --- visitas guardadas --- */
+  $('cardVisitas').style.display=estado.visitas.length?'':'none';
+  let hv='';
+  for(const v of [...estado.visitas].reverse()){
+    const f=new Date(v.fecha);
+    hv+='<div class="visita-fila" data-visita="'+v.id+'">'
+      +'<div class="info"><div class="nom">'+esc(v.nombre)+'</div>'
+      +'<div class="det">'+f.toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+' · '+v.unidades+' uds</div></div>'
+      +(v.total!=null?'<div class="tot">'+v.total.toFixed(2).replace('.',',')+' €</div>':'')
+      +'<span style="color:var(--tx3)">›</span></div>';
+  }
+  $('listaVisitas').innerHTML=hv;
+}
+
+/* ================= Visitas guardadas ================= */
+function guardarVisitaActual(nombre){
+  if(!estado.pedido.length)return;
+  const items=estado.pedido.map(l=>{const p=platoDe(l.platoId);
+    return {nombre:p.nombre,numero:p.numero,cantidad:l.pedidas,llegadas:l.llegadas,precio:p.precio,nota:p.nota||0};});
+  let total=0,conPrecio=true,unidades=0;
+  items.forEach(i=>{unidades+=i.cantidad;const pr=precioNum(i.precio);if(pr==null)conPrecio=false;else total+=pr*i.cantidad;});
+  estado.visitas.push({id:uid(),fecha:new Date().toISOString(),nombre:nombre||'Sushi',items,total:conPrecio?total:null,unidades});
+}
+let visitaAbierta=null;
+function abrirVisita(id){
+  const v=estado.visitas.find(x=>x.id===id); if(!v)return;
+  visitaAbierta=id;
+  const f=new Date(v.fecha);
+  $('mVisitaTitulo').textContent=v.nombre+' — '+f.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});
+  let h='';
+  for(const it of v.items){
+    h+='<div class="visita-item"><div class="n">'+(it.numero?esc(it.numero)+' · ':'')+esc(it.nombre)
+      +(it.cantidad>1?' <b>×'+it.cantidad+'</b>':'')+'</div>'
+      +(it.nota?'<div class="est">'+'★'.repeat(it.nota)+'</div>':'')
+      +(precioNum(it.precio)!=null?'<div style="color:var(--tx2)">'+(precioNum(it.precio)*it.cantidad).toFixed(2).replace('.',',')+'€</div>':'')
+      +'</div>';
+  }
+  if(v.total!=null)h+='<div class="visita-item" style="font-weight:700"><div class="n">Total</div><div>'+v.total.toFixed(2).replace('.',',')+' €</div></div>';
+  $('mVisitaCuerpo').innerHTML=h;
+  $('mVisitaFondo').classList.add('abierto');
+}
+async function pintarHistorial(){
+  const cont=$('histLlegadas'); if(!cont)return;
+  cont.innerHTML='';
+  for(const ll of [...estado.llegadas].reverse()){
+    const d=document.createElement('div'); d.className='llegada-hist';
+    if(ll.fotoId){const u=await fotoURL(ll.fotoId);if(u){const im=document.createElement('img');im.src=u;im.onclick=()=>abrirVisor(u);d.appendChild(im);}}
+    const txt=document.createElement('div');
+    txt.innerHTML='<b>'+esc(ll.hora)+'</b> — '+esc(ll.items.map(i=>platoDe(i.platoId).nombre+(i.cantidad>1?' ×'+i.cantidad:'')).join(', '));
+    d.appendChild(txt); cont.appendChild(d);
+  }
+}
+
+/* ================= Modal llegada ================= */
+let llegadaCtx=null; // {fotoId, seleccion:{platoId:cant}}
+function abrirLlegada(fotoId,sugerencias,nota){
+  const pend=lineasPendientes();
+  if(!pend.length){toast('No queda nada pendiente 🎉');return;}
+  llegadaCtx={fotoId:fotoId||null,seleccion:{}};
+  const img=$('llegadaFoto');
+  if(fotoId){fotoURL(fotoId).then(u=>{img.src=u;img.style.display='';});}
+  else img.style.display='none';
+  const nt=$('llegadaNota');
+  if(nota){nt.style.display='';nt.innerHTML='<b>🤖 IA:</b> '+esc(nota);}
+  else nt.style.display='none';
+  const sug={};(sugerencias||[]).forEach(s=>{const p=buscarPlato(String(s.nombre||''));if(p)sug[p.id]=Math.max(1,parseInt(s.cantidad)||1);});
+  let h='';
+  for(const l of pend){
+    const p=platoDe(l.platoId), falta=l.pedidas-l.llegadas;
+    const pre=sug[l.platoId]?Math.min(sug[l.platoId],falta):0;
+    if(pre)llegadaCtx.seleccion[l.platoId]=pre;
+    h+='<div class="check-linea'+(pre?' marcada':'')+'" data-linea="'+l.platoId+'">'
+      +'<div class="cbx">'+(pre?'✓':'')+'</div>'
+      +'<div class="info"><div class="nom">'+(p.numero?esc(p.numero)+' · ':'')+esc(p.nombre)
+      +(sug[l.platoId]?' <span class="sug">IA</span>':'')+'</div>'
+      +'<div class="det">faltan '+falta+'</div></div>'
+      +'<div class="stepper" style="'+(pre?'':'visibility:hidden')+'"><button data-lmenos="'+l.platoId+'">−</button><span class="n" id="lc_'+l.platoId+'">'+(pre||1)+'</span><button data-lmas="'+l.platoId+'">＋</button></div>'
+      +'</div>';
+  }
+  $('llegadaLineas').innerHTML=h;
+  $('mLlegadaFondo').classList.add('abierto');
+}
+function llegadaToggle(platoId){
+  const linea=document.querySelector('.check-linea[data-linea="'+platoId+'"]'); if(!linea)return;
+  const marcada=!!llegadaCtx.seleccion[platoId];
+  if(marcada){delete llegadaCtx.seleccion[platoId];linea.classList.remove('marcada');linea.querySelector('.cbx').textContent='';linea.querySelector('.stepper').style.visibility='hidden';}
+  else{llegadaCtx.seleccion[platoId]=1;linea.classList.add('marcada');linea.querySelector('.cbx').textContent='✓';linea.querySelector('.stepper').style.visibility='';$('lc_'+platoId).textContent='1';}
+}
+function llegadaCant(platoId,delta){
+  const l=estado.pedido.find(x=>x.platoId===platoId); if(!l)return;
+  const max=l.pedidas-l.llegadas;
+  let v=(llegadaCtx.seleccion[platoId]||1)+delta;
+  v=Math.max(1,Math.min(max,v));
+  llegadaCtx.seleccion[platoId]=v; $('lc_'+platoId).textContent=v;
+}
+function confirmarLlegada(){
+  const items=[];
+  for(const pid in llegadaCtx.seleccion){
+    const l=estado.pedido.find(x=>x.platoId===pid); if(!l)continue;
+    const c=Math.min(llegadaCtx.seleccion[pid],l.pedidas-l.llegadas);
+    if(c>0){l.llegadas+=c;items.push({platoId:pid,cantidad:c});}
+  }
+  if(!items.length){toast('Marca al menos un plato');return;}
+  estado.llegadas.push({fotoId:llegadaCtx.fotoId,hora:new Date().toTimeString().slice(0,5),items});
+  guardar();
+  $('mLlegadaFondo').classList.remove('abierto');
+  render();vibrar([40,60,40]);
+  const t=totales();
+  toast(t.lleg>=t.ped?'¡Todo servido! 🎉':'Apuntado ✓ Faltan '+(t.ped-t.lleg));
+}
+async function flujoFotoLlegada(){
+  const file=await pedirFoto(); if(!file)return;
+  cargando('Guardando foto…');
+  const blob=await reducirFoto(file);
+  const id=uid(); await fotoPut(id,blob);
+  let sug=null;
+  if(apiKey()){
+    $('cargandoTxt').textContent='Identificando platos…';
+    try{sug=await iaReconocerLlegada(id);}catch(e){toast('IA no disponible: '+e.message);}
+  }
+  finCargando();
+  abrirLlegada(id,sug&&sug.sugerencias,sug&&sug.nota);
+}
+
+/* ================= Editor de plato ================= */
+let editandoId=null;
+function abrirEditor(id){
+  editandoId=id;
+  const p=id?platoDe(id):{nombre:'',numero:'',precio:'',categoria:'',esSet:false,contiene:''};
+  $('mPlatoTitulo').textContent=id?'Editar plato':'Nuevo plato';
+  $('pNombre').value=p.nombre;$('pNumero').value=p.numero;$('pPrecio').value=p.precio;
+  $('pCategoria').value=p.categoria;$('pEsSet').checked=p.esSet;$('pContiene').value=p.contiene;
+  $('btnPlatoBorrar').style.display=id?'':'none';
+  $('mPlatoFondo').classList.add('abierto');
+}
+function guardarEditor(){
+  const nombre=$('pNombre').value.trim();
+  if(!nombre){toast('Ponle nombre al plato');return;}
+  const datos={nombre,numero:$('pNumero').value.trim(),precio:$('pPrecio').value.trim(),
+    categoria:$('pCategoria').value.trim(),esSet:$('pEsSet').checked,contiene:$('pContiene').value.trim()};
+  if(editandoId)Object.assign(platoDe(editandoId),datos);
+  else estado.platos.push(Object.assign({id:uid()},datos));
+  guardar();render();
+  $('mPlatoFondo').classList.remove('abierto');
+}
+
+/* ================= Visor con zoom ================= */
+const visor=$('visor'),vImg=$('visorImg');
+let vz={x:0,y:0,s:1,punteros:new Map(),base:null};
+function abrirVisor(url){
+  vImg.src=url;visor.classList.add('abierto');
+  vImg.onload=()=>{
+    const s=Math.min(innerWidth/vImg.naturalWidth,innerHeight/vImg.naturalHeight);
+    vz={x:(innerWidth-vImg.naturalWidth*s)/2,y:(innerHeight-vImg.naturalHeight*s)/2,s,punteros:new Map(),base:null,minS:s};
+    aplicarVisor();
+  };
+}
+function aplicarVisor(){vImg.style.transform='translate('+vz.x+'px,'+vz.y+'px) scale('+vz.s+')';}
+visor.addEventListener('pointerdown',e=>{
+  if(e.target===$('visorCerrar'))return;
+  visor.setPointerCapture(e.pointerId);
+  vz.punteros.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  vz.base={x:vz.x,y:vz.y,s:vz.s,punteros:new Map(vz.punteros)};
+});
+visor.addEventListener('pointermove',e=>{
+  if(!vz.punteros.has(e.pointerId))return;
+  vz.punteros.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  const b=vz.base; if(!b)return;
+  const ids=[...vz.punteros.keys()];
+  if(ids.length===1){
+    const p0=b.punteros.get(ids[0]),p1=vz.punteros.get(ids[0]); if(!p0)return;
+    vz.x=b.x+(p1.x-p0.x); vz.y=b.y+(p1.y-p0.y);
+  }else if(ids.length>=2){
+    const a0=b.punteros.get(ids[0]),b0=b.punteros.get(ids[1]);
+    const a1=vz.punteros.get(ids[0]),b1=vz.punteros.get(ids[1]);
+    if(!a0||!b0)return;
+    const d0=Math.hypot(b0.x-a0.x,b0.y-a0.y),d1=Math.hypot(b1.x-a1.x,b1.y-a1.y);
+    const f=Math.max(vz.minS*.8,Math.min(8,b.s*(d1/d0)))/b.s;
+    const cx=(a0.x+b0.x)/2,cy=(a0.y+b0.y)/2;
+    vz.s=b.s*f; vz.x=cx-(cx-b.x)*f+((a1.x+b1.x)/2-cx); vz.y=cy-(cy-b.y)*f+((a1.y+b1.y)/2-cy);
+  }
+  aplicarVisor();
+});
+function soltarPuntero(e){vz.punteros.delete(e.pointerId);vz.base=null;}
+visor.addEventListener('pointerup',soltarPuntero);
+visor.addEventListener('pointercancel',soltarPuntero);
+let ultToque=0;
+visor.addEventListener('pointerup',e=>{
+  const ahora=Date.now();
+  if(ahora-ultToque<300&&vz.punteros.size===0){
+    if(vz.s>vz.minS*1.1){vz.s=vz.minS;vz.x=(innerWidth-vImg.naturalWidth*vz.s)/2;vz.y=(innerHeight-vImg.naturalHeight*vz.s)/2;}
+    else{const f=2.5;vz.x=e.clientX-(e.clientX-vz.x)*f;vz.y=e.clientY-(e.clientY-vz.y)*f;vz.s*=f;}
+    aplicarVisor();
+  }
+  ultToque=ahora;
+});
+$('visorCerrar').onclick=()=>visor.classList.remove('abierto');
+
+/* ================= Carta de ejemplo ================= */
+function cargarDemo(){
+  const demo=[
+    ['Maki rolls',[['Salmón','4'],['Anguila','5'],['Aguacate','3'],['Calamar','4'],['Atún','4']]],
+    ['Futomaki rolls',[['Ikura','5'],['Atún','6'],['Cangrejo-anguila','6'],['Salmón','6']]],
+    ['Uramaki rolls',[['Philadelphia maxi','7'],['Alaska','7'],['California red','7'],['Canadá','8'],['Philadelphia','7'],['California','8']]],
+    ['Nigiri',[['Salmón','3'],['Laceda','5'],['Atún','6'],['Calamar','3'],['Gamba','4']]],
+    ['Gunkan',[['Salmón','3'],['Vieira','3'],['Masago','3'],['Unagi','2'],['Ikura','2'],['Tobiko','3']]],
+    ['Temaki',[['Unagi','5'],['Gamba','4'],['Atún','5'],['Salmón','4']]]
+  ];
+  let n=1;
+  demo.forEach(([cat,items])=>items.forEach(([nom,pre])=>{
+    estado.platos.push({id:uid(),numero:String(n++),nombre:nom+' ('+cat.split(' ')[0].toLowerCase()+')',precio:pre,categoria:cat,esSet:false,contiene:''});
+  }));
+  estado.platos.push({id:uid(),numero:String(n++),nombre:'Set Classical',precio:'18',categoria:'Special sets',esSet:true,contiene:'550 g de piezas variadas'});
+  estado.platos.push({id:uid(),numero:String(n++),nombre:'Set Sushi XL',precio:'28',categoria:'Special sets',esSet:true,contiene:'850 g de piezas variadas'});
+  guardar();render();
+  toast('Carta de ejemplo cargada — toca Pedir en algún plato');
+}
+
+/* ================= Eventos ================= */
+document.querySelector('nav').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-vista]'); if(b)cambiarVista(b.dataset.vista);
+});
+document.body.addEventListener('click',e=>{
+  const t=e.target.closest('[data-estrella],[data-visita],[data-pedir],[data-editar],[data-mas],[data-menos],[data-quitar],[data-llego],[data-deshacer],[data-linea],[data-lmas],[data-lmenos]');
+  if(!t)return;
+  const d=t.dataset;
+  if(d.estrella){e.stopPropagation();const [pid,n]=d.estrella.split(':');const p=platoDe(pid);p.nota=(p.nota===+n)?0:+n;guardar();render();vibrar(20);}
+  else if(d.visita)abrirVisita(d.visita);
+  else if(d.pedir)pedirPlato(d.pedir);
+  else if(d.editar)abrirEditor(d.editar);
+  else if(d.mas){const l=estado.pedido.find(x=>x.platoId===d.mas);if(l){l.pedidas++;guardar();render();}}
+  else if(d.menos){const l=estado.pedido.find(x=>x.platoId===d.menos);if(l){l.pedidas--;if(l.pedidas<=0)estado.pedido=estado.pedido.filter(x=>x!==l);guardar();render();}}
+  else if(d.quitar){estado.pedido=estado.pedido.filter(x=>x.platoId!==d.quitar);guardar();render();}
+  else if(d.deshacer){e.stopPropagation();const l=estado.pedido.find(x=>x.platoId===d.deshacer);if(l&&l.llegadas>0){l.llegadas--;guardar();render();}}
+  else if(d.llego){const l=estado.pedido.find(x=>x.platoId===d.llego);if(l&&l.llegadas<l.pedidas){l.llegadas++;estado.llegadas.push({fotoId:null,hora:new Date().toTimeString().slice(0,5),items:[{platoId:d.llego,cantidad:1}]});guardar();render();vibrar(35);const t2=totales();toast(t2.lleg>=t2.ped?'¡Todo servido! 🎉':platoDe(d.llego).nombre+' ✓');}}
+  else if(d.lmas){e.stopPropagation();llegadaCant(d.lmas,1);}
+  else if(d.lmenos){e.stopPropagation();llegadaCant(d.lmenos,-1);}
+  else if(d.linea)llegadaToggle(d.linea);
+});
+// los steppers dentro de check-linea no deben alternar el check
+document.body.addEventListener('click',e=>{
+  if(e.target.closest('.stepper')&&e.target.closest('.check-linea'))e.stopPropagation();
+},true);
+
+$('btnFotoCarta').onclick=async()=>{
+  const f=await pedirFoto(); if(!f)return;
+  cargando('Guardando foto…');
+  const blob=await reducirFoto(f); const id=uid();
+  await fotoPut(id,blob); estado.fotosCarta.push(id); guardar(); render(); finCargando();
+  toast('Foto guardada. Pulsa 🤖 Leer con IA');
+};
+$('btnIaCarta').onclick=iaLeerCarta;
+$('btnFotoLista').onclick=async()=>{
+  const f=await pedirFoto(); if(!f)return;
+  cargando('Guardando foto…');
+  const blob=await reducirFoto(f); const id=uid();
+  await fotoPut(id,blob); estado.fotosLista.push({id,leida:false}); guardar(); render(); finCargando();
+  toast('Foto guardada. Pulsa 🤖 Leer con IA');
+};
+$('btnIaLista').onclick=iaLeerLista;
+$('btnPlatoManual').onclick=()=>abrirEditor(null);
+$('btnDemo').onclick=cargarDemo;
+$('btnPlatoCancelar').onclick=()=>$('mPlatoFondo').classList.remove('abierto');
+$('btnPlatoOk').onclick=guardarEditor;
+$('btnPlatoBorrar').onclick=()=>{
+  if(!editandoId)return;
+  if(!confirm('¿Eliminar este plato?'))return;
+  estado.platos=estado.platos.filter(p=>p.id!==editandoId);
+  estado.pedido=estado.pedido.filter(l=>l.platoId!==editandoId);
+  guardar();render();$('mPlatoFondo').classList.remove('abierto');
+};
+$('btnLlegadaCancelar').onclick=()=>$('mLlegadaFondo').classList.remove('abierto');
+$('btnLlegadaOk').onclick=confirmarLlegada;
+document.body.addEventListener('click',e=>{
+  if(e.target.id==='btnFotoLlegada')flujoFotoLlegada();
+  if(e.target.id==='btnManoLlegada')abrirLlegada(null,null,null);
+});
+
+/* ajustes */
+$('inpApiKey').value=apiKey();
+$('selModelo').value=modelo();
+$('btnGuardarKey').onclick=()=>{
+  localStorage.setItem('sushilista_apikey',$('inpApiKey').value.trim());
+  localStorage.setItem('sushilista_modelo',$('selModelo').value);
+  toast('Guardado ✓');
+};
+$('btnProbarKey').onclick=async()=>{
+  localStorage.setItem('sushilista_apikey',$('inpApiKey').value.trim());
+  localStorage.setItem('sushilista_modelo',$('selModelo').value);
+  cargando('Probando conexión…');
+  try{
+    const r=await llamarClaude([{type:'text',text:'Responde solo con la palabra: hola'}],50);
+    toast(r.toLowerCase().includes('hola')?'Conexión OK ✓ ('+modelo()+')':'Conexión OK ✓');
+  }catch(e){toast('⚠️ '+e.message);}
+  finCargando();
+};
+$('btnNuevaVisita').onclick=async()=>{
+  if(!confirm('¿Empezar visita nueva? La actual se guarda en el historial y la carta se mantiene.'))return;
+  if(estado.pedido.length){
+    const nom=prompt('Nombre del restaurante para el historial:','Sushi');
+    guardarVisitaActual(nom===null?'Sushi':nom.trim()||'Sushi');
+  }
+  for(const f of estado.fotosLista)await fotoDel(f.id);
+  for(const ll of estado.llegadas)if(ll.fotoId)await fotoDel(ll.fotoId);
+  estado.pedido=[];estado.fotosLista=[];estado.llegadas=[];
+  guardar();render();cambiarVista('vCarta');toast('Visita guardada. ¡Que aproveche la próxima!');
+};
+$('btnBorrarTodo').onclick=async()=>{
+  if(!confirm('¿Borrar la carta y el pedido actual? Las visitas guardadas se conservan.'))return;
+  const ids=[...estado.fotosCarta,...estado.fotosLista.map(f=>f.id),...estado.llegadas.map(l=>l.fotoId).filter(Boolean)];
+  for(const id of ids)await fotoDel(id);
+  estado.platos=[];estado.pedido=[];estado.fotosCarta=[];estado.fotosLista=[];estado.llegadas=[];
+  guardar();render();cambiarVista('vCarta');toast('Borrado. Las visitas guardadas siguen ahí.');
+};
+$('btnVisitaCerrar').onclick=()=>$('mVisitaFondo').classList.remove('abierto');
+$('btnVisitaBorrar').onclick=()=>{
+  if(!visitaAbierta)return;
+  if(!confirm('¿Eliminar esta visita del historial?'))return;
+  estado.visitas=estado.visitas.filter(v=>v.id!==visitaAbierta);
+  visitaAbierta=null;guardar();render();
+  $('mVisitaFondo').classList.remove('abierto');toast('Visita eliminada');
+};
+
+/* ================= Arranque ================= */
+abrirDB().then(()=>{
+  render();
+  // arranca en Mesa si hay pedido en marcha
+  const t=totales();
+  if(t.ped>0&&t.lleg<t.ped)cambiarVista('vMesa');
+});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
