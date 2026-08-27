@@ -1,4 +1,4 @@
-const CACHE = 'sushilista-v1.0.0';
+const CACHE = 'sushilista-v1.0.1';
 const FICHEROS = [
   './',
   './index.html',

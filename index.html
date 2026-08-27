@@ -399,15 +399,16 @@ h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;co
 
 <script>
 'use strict';
-const VERSION='1.0.0';
+const VERSION='1.0.1';
 document.getElementById('version').textContent='v'+VERSION;
 
 /* ================= Estado ================= */
 const CLAVE='sushilista_v1';
 let estado={platos:[],pedido:[],fotosCarta:[],fotosLista:[],llegadas:[],visitas:[]};
 try{const g=localStorage.getItem(CLAVE);if(g)estado=Object.assign(estado,JSON.parse(g));}catch(e){}
-// migración: fotosLista pasa de ["id"] a [{id,leida}]
+// migración: fotos pasan de ["id"] a [{id,leida}]
 estado.fotosLista=(estado.fotosLista||[]).map(f=>typeof f==='string'?{id:f,leida:false}:f);
+estado.fotosCarta=(estado.fotosCarta||[]).map(f=>typeof f==='string'?{id:f,leida:false}:f);
 estado.visitas=estado.visitas||[];
 function guardar(){localStorage.setItem(CLAVE,JSON.stringify(estado));}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -516,9 +517,11 @@ async function bloquesImagen(ids){
 /* ================= IA: leer carta ================= */
 async function iaLeerCarta(){
   if(!estado.fotosCarta.length){toast('Primero haz una foto de la carta');return;}
+  const noLeidas=estado.fotosCarta.filter(f=>!f.leida);
+  if(!noLeidas.length){toast('Esas fotos ya están leídas. Haz foto de otra página de la carta.');return;}
   cargando('Leyendo la carta…');
   try{
-    const bloques=await bloquesImagen(estado.fotosCarta);
+    const bloques=await bloquesImagen(noLeidas.map(f=>f.id));
     bloques.push({type:'text',text:
 `Estas fotos son la carta de un restaurante (probablemente sushi). Extrae TODOS los platos.
 Responde SOLO con un JSON válido, sin explicaciones, con esta forma exacta:
@@ -542,9 +545,13 @@ Reglas:
     let añadidos=0;
     for(const n of nuevos){
       const ya=estado.platos.find(p=>p.nombre.toLowerCase()===n.nombre.toLowerCase());
-      if(ya){Object.assign(ya,{numero:n.numero||ya.numero,precio:n.precio||ya.precio,categoria:n.categoria||ya.categoria,esSet:n.esSet||ya.esSet,contiene:n.contiene||ya.contiene});}
+      if(ya){Object.assign(ya,{numero:n.numero||ya.numero,precio:n.precio||ya.precio,categoria:n.categoria||ya.categoria,esSet:n.esSet||ya.esSet,contiene:n.contiene||ya.contiene});continue;}
+      // si existía un "Plato N" provisional creado desde una lista, se completa con el nombre real
+      const prov=n.numero&&estado.platos.find(p=>normNum(p.numero)===normNum(n.numero)&&p.nombre.indexOf('Plato ')===0);
+      if(prov){Object.assign(prov,{nombre:n.nombre,precio:n.precio,categoria:n.categoria,esSet:n.esSet,contiene:n.contiene});añadidos++;}
       else{estado.platos.push(n);añadidos++;}
     }
+    noLeidas.forEach(f=>f.leida=true);
     guardar();render();
     toast(añadidos+' platos leídos de la carta ✓');vibrar(60);
   }catch(e){toast('⚠️ '+e.message);}
@@ -552,9 +559,31 @@ Reglas:
 }
 
 /* ================= IA: leer lista apuntada ================= */
+function normNum(n){
+  const s=String(n==null?'':n).trim(); if(!s)return '';
+  const v=parseInt(s,10); return isNaN(v)?s.toLowerCase():String(v);
+}
+function aplicarPedidoLeido(json){
+  let añadidos=0,creados=0;
+  for(const l of (json.pedido||[])){
+    const num=normNum(l.numero);
+    const cant=Math.max(1,parseInt(l.cantidad)||1);
+    let plato=null;
+    if(num)plato=estado.platos.find(p=>normNum(p.numero)===num)||null;
+    if(!plato&&l.nombre)plato=buscarPlato(String(l.nombre));
+    if(!plato&&num){
+      plato={id:uid(),numero:num,nombre:'Plato '+num,precio:'',categoria:'Sin carta',esSet:false,contiene:''};
+      estado.platos.push(plato);creados++;
+    }
+    if(!plato)continue;
+    const linea=estado.pedido.find(x=>x.platoId===plato.id);
+    if(linea)linea.pedidas+=cant; else estado.pedido.push({platoId:plato.id,pedidas:cant,llegadas:0});
+    añadidos+=cant;
+  }
+  return {añadidos,creados};
+}
 async function iaLeerLista(){
   if(!estado.fotosLista.length){toast('Primero haz una foto de la lista');return;}
-  if(!estado.platos.length){toast('Lee antes la carta, para poder casar los platos');return;}
   const noLeidas=estado.fotosLista.filter(f=>!f.leida);
   if(!noLeidas.length){toast('Todas las listas ya están leídas. Haz foto de la lista nueva.');return;}
   cargando('Leyendo vuestra lista…');
@@ -562,29 +591,25 @@ async function iaLeerLista(){
     const cartaTxt=estado.platos.map(p=>(p.numero?p.numero+' · ':'')+p.nombre).join('\n');
     const bloques=await bloquesImagen(noLeidas.map(f=>f.id));
     bloques.push({type:'text',text:
-`Esta foto es una lista escrita a mano en un restaurante donde apuntamos lo que pedimos: números de plato o nombres, y cantidades (palotes, cifras o marcas).
-La carta del restaurante tiene estos platos (numero · nombre):
-${cartaTxt}
+`Esta foto es la hoja de pedido de un restaurante de sushi donde se apunta a mano el NÚMERO del plato y su CANTIDAD (la cantidad suele ir rodeada con un círculo; también valen palotes o cifras sueltas). A veces se apuntan nombres en vez de números.
+La carta del restaurante (numero · nombre) es:
+${cartaTxt||'(aún no hay carta leída)'}
 Responde SOLO con un JSON válido:
-{"pedido":[{"nombre":"<nombre EXACTO de la lista de arriba>","cantidad":2}],"dudas":"<si algo no se entiende o no casa con la carta, explícalo aquí en una frase; si no, cadena vacía>"}
+{"pedido":[{"numero":"68","nombre":"","cantidad":1}],"dudas":""}
 Reglas:
-- Casa cada apunte con el plato de la carta (por número o por nombre parecido) y devuelve el nombre EXACTO de la carta.
-- Si un apunte no casa con nada de la carta, no lo inventes: menciónalo en "dudas".
-- La cantidad por defecto es 1 si solo aparece el plato sin número de unidades.`});
+- Un elemento por línea escrita en la hoja. No te saltes ninguna línea con algo apuntado.
+- "numero": el número apuntado tal cual, o "" si solo hay nombre.
+- "nombre": si el apunte casa con un plato de la carta de arriba (por número o nombre), pon el nombre EXACTO de la carta; si no casa o no hay carta, "".
+- "cantidad": lo escrito en la columna de cantidad; 1 si no se distingue.
+- Si alguna cifra es dudosa, inclúyela igualmente con tu mejor lectura y coméntala en "dudas" (una frase corta).`});
     const json=extraerJSON(await llamarClaude(bloques,8000));
-    let añadidos=0;
-    for(const l of (json.pedido||[])){
-      const plato=buscarPlato(String(l.nombre||''));
-      const cant=Math.max(1,parseInt(l.cantidad)||1);
-      if(!plato)continue;
-      const linea=estado.pedido.find(x=>x.platoId===plato.id);
-      if(linea)linea.pedidas+=cant; else estado.pedido.push({platoId:plato.id,pedidas:cant,llegadas:0});
-      añadidos+=cant;
-    }
+    const r=aplicarPedidoLeido(json);
     noLeidas.forEach(f=>f.leida=true);
     guardar();render();
-    if(json.dudas)toast('Leído ✓ Ojo: '+json.dudas);
-    else toast(añadidos+' unidades añadidas al pedido ✓');
+    let msj=r.añadidos+' unidades añadidas al pedido ✓';
+    if(r.creados)msj+=' ('+r.creados+' sin carta, creados por número)';
+    if(json.dudas)msj+=' · Ojo: '+json.dudas;
+    toast(msj);
     vibrar(60);
   }catch(e){toast('⚠️ '+e.message);}
   finCargando();
@@ -672,7 +697,7 @@ function render(){
   $('cartaVacia').style.display=(estado.platos.length||estado.fotosCarta.length)?'none':'';
   $('btnPlatoManual').style.display=(estado.platos.length||estado.fotosCarta.length)?'':'none';
   pintarTira($('fotosCarta'),estado.fotosCarta,async id=>{
-    estado.fotosCarta=estado.fotosCarta.filter(x=>x!==id);await fotoDel(id);guardar();render();
+    estado.fotosCarta=estado.fotosCarta.filter(f=>f.id!==id);await fotoDel(id);guardar();render();
   });
   const porCat={};
   estado.platos.forEach(p=>{const c=p.categoria||'Otros';(porCat[c]=porCat[c]||[]).push(p);});
@@ -1016,7 +1041,7 @@ $('btnFotoCarta').onclick=async()=>{
   const f=await pedirFoto(); if(!f)return;
   cargando('Guardando foto…');
   const blob=await reducirFoto(f); const id=uid();
-  await fotoPut(id,blob); estado.fotosCarta.push(id); guardar(); render(); finCargando();
+  await fotoPut(id,blob); estado.fotosCarta.push({id,leida:false}); guardar(); render(); finCargando();
   toast('Foto guardada. Pulsa 🤖 Leer con IA');
 };
 $('btnIaCarta').onclick=iaLeerCarta;
@@ -1077,7 +1102,7 @@ $('btnNuevaVisita').onclick=async()=>{
 };
 $('btnBorrarTodo').onclick=async()=>{
   if(!confirm('¿Borrar la carta y el pedido actual? Las visitas guardadas se conservan.'))return;
-  const ids=[...estado.fotosCarta,...estado.fotosLista.map(f=>f.id),...estado.llegadas.map(l=>l.fotoId).filter(Boolean)];
+  const ids=[...estado.fotosCarta.map(f=>f.id),...estado.fotosLista.map(f=>f.id),...estado.llegadas.map(l=>l.fotoId).filter(Boolean)];
   for(const id of ids)await fotoDel(id);
   estado.platos=[];estado.pedido=[];estado.fotosCarta=[];estado.fotosLista=[];estado.llegadas=[];
   guardar();render();cambiarVista('vCarta');toast('Borrado. Las visitas guardadas siguen ahí.');
